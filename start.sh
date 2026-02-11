@@ -19,7 +19,14 @@ tailscaled \
   --outbound-http-proxy-listen=localhost:1056 \
   --verbose=2 &
 
-sleep 2
+echo "[start] waiting for tailscaled to be ready..."
+for i in $(seq 1 45); do
+  if tailscale --socket="$STATE_DIR/tailscaled.sock" status >/dev/null 2>&1; then
+    echo "[start] tailscaled is ready"
+    break
+  fi
+  sleep 1
+done
 
 echo "[start] running tailscale up"
 tailscale --socket="$STATE_DIR/tailscaled.sock" up \
