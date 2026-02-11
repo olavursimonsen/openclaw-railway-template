@@ -39,7 +39,7 @@ RUN pnpm ui:install && pnpm ui:build
 FROM node:22-bookworm
 ENV NODE_ENV=production
 
-# Runtime deps + tailscale (NO homebrew)
+# Runtime deps + tailscale
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -47,6 +47,8 @@ RUN apt-get update \
     procps \
     iptables \
     iproute2 \
+    openssh-client \
+    netcat-openbsd \
   && rm -rf /var/lib/apt/lists/* \
   && curl -fsSL https://tailscale.com/install.sh | sh
 
