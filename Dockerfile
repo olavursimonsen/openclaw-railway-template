@@ -1,9 +1,9 @@
 # Build openclaw from source to avoid npm packaging gaps
 FROM node:22-bookworm AS openclaw-build
 
-# Build deps needed for openclaw build
-RUN apt-get update \
-  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+# Build deps needed for openclaw build (add retries)
+RUN apt-get update -o Acquire::Retries=5 \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --fix-missing \
      ca-certificates \
      curl \
      build-essential \
@@ -11,8 +11,11 @@ RUN apt-get update \
      python3 \
   && rm -rf /var/lib/apt/lists/*
 
-# Bun (openclaw build uses it)
-RUN curl -fsSL https://bun.sh/install | bash
+# Bun (openclaw build uses it) + retries
+RUN (curl -fsSL https://bun.sh/install | bash) \
+  || (sleep 2 && curl -fsSL https://bun.sh/install | bash) \
+  || (sleep 5 && curl -fsSL https://bun.sh/install | bash)
+
 ENV PATH="/root/.bun/bin:${PATH}"
 
 RUN corepack enable
@@ -39,9 +42,9 @@ RUN pnpm ui:install && pnpm ui:build
 FROM node:22-bookworm
 ENV NODE_ENV=production
 
-# Runtime deps + tailscale
-RUN apt-get update \
-  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+# Runtime deps + tailscale (apt retries + tailscale retries)
+RUN apt-get update -o Acquire::Retries=5 \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --fix-missing \
     ca-certificates \
     curl \
     procps \
@@ -50,7 +53,9 @@ RUN apt-get update \
     openssh-client \
     netcat-openbsd \
   && rm -rf /var/lib/apt/lists/* \
-  && curl -fsSL https://tailscale.com/install.sh | sh
+  && (curl -fsSL https://tailscale.com/install.sh | sh) \
+     || (sleep 2 && curl -fsSL https://tailscale.com/install.sh | sh) \
+     || (sleep 5 && curl -fsSL https://tailscale.com/install.sh | sh)
 
 WORKDIR /app
 
