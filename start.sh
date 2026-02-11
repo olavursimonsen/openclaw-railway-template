@@ -46,7 +46,25 @@ tailscaled \
   echo "[ts] tailscale ip:"
   tailscale --socket="$SOCK" ip -4 || true
 
+  # ----------------------------------------------------------
+  # DEBUG: verify SOCKS is actually listening and usable
+  # ----------------------------------------------------------
+  echo "--------------------------------"
+  echo "[ts] DEBUG: checking SOCKS proxy"
+
+  echo "[ts] checking if SOCKS port 1055 is listening..."
+  nc -zv 127.0.0.1 1055 && echo "[ts] SOCKS OK" || echo "[ts] SOCKS FAIL"
+
+  if [[ -n "${OPENCLAW_SSH_HOST:-}" ]]; then
+    echo "[ts] testing TCP to ${OPENCLAW_SSH_HOST}:22 via SOCKS..."
+    nc -x 127.0.0.1:1055 -X 5 -vz "$OPENCLAW_SSH_HOST" 22 || true
+  else
+    echo "[ts] OPENCLAW_SSH_HOST not set; skipping nc test to host"
+  fi
+
+  # ----------------------------------------------------------
   # SSH key setup
+  # ----------------------------------------------------------
   if [[ -n "${OPENCLAW_SSH_PRIVATE_KEY:-}" && -n "${OPENCLAW_SSH_HOST:-}" && -n "${OPENCLAW_SSH_USER:-}" ]]; then
     echo "[ts] setting up SSH key..."
 
