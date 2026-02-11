@@ -25,14 +25,17 @@ echo "[start] DEBUG: started tailscaled, now starting background bootstrap..."
 
 # Run Tailscale + SSH prep in background so Railway healthcheck doesn't fail
 (
-  echo "[ts] waiting for tailscaled..."
-  for i in $(seq 1 60); do
-    if tailscale --socket="$SOCK" status >/dev/null 2>&1; then
-      echo "[ts] tailscaled OK"
-      break
-    fi
-    sleep 1
-  done
+  echo "[ts] waiting for tailscaled socket..."
+for i in $(seq 1 60); do
+  if [ -S "$SOCK" ]; then
+    echo "[ts] socket exists"
+    break
+  fi
+  sleep 1
+done
+
+echo "[ts] checking tailscale status..."
+tailscale --socket="$SOCK" status || true
 
   if [[ -z "${TAILSCALE_AUTHKEY:-}" ]]; then
     echo "[ts] WARN: missing TAILSCALE_AUTHKEY, skipping"
