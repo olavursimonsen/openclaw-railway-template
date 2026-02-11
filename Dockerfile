@@ -4,13 +4,24 @@ FROM node:22-bookworm AS openclaw-build
 # Dependencies needed for openclaw build
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    git \
-    ca-certificates \
-    curl \
-    python3 \
-    make \
-    g++ \
+     ca-certificates \
+     curl \
+     build-essential \
+     gcc \
+     g++ \
+     make \
+     procps \
+     file \
+     git \
+     python3 \
+     pkg-config \
+     sudo \
+     iptables \
+     iproute2 \
+     openssh-client \
   && rm -rf /var/lib/apt/lists/*
+
+  RUN curl -fsSL https://tailscale.com/install.sh | sh
 
 # Install Bun (openclaw build uses it)
 RUN curl -fsSL https://bun.sh/install | bash
@@ -88,4 +99,6 @@ COPY src ./src
 
 ENV PORT=8080
 EXPOSE 8080
-CMD ["node", "src/server.js"]
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+ENTRYPOINT ["/start.sh"]
