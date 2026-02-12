@@ -23,26 +23,41 @@ tailscaled \
 
 echo "[start] DEBUG: started tailscaled, now starting background bootstrap..."
 
-# Run Tailscale + SSH prep in background so Railway healthcheck doesn't fail
 (
+  # ----------------------------------------------------------
+  # 1️⃣ Wait for socket
+  # ----------------------------------------------------------
   echo "[ts] waiting for tailscaled socket..."
-for i in $(seq 1 60); do
-  if [ -S "$SOCK" ]; then
-    echo "[ts] socket exists"
-    break
-  fi
-  sleep 1
-done
+  for i in $(seq 1 60); do
+    if [ -S "$SOCK" ]; then
+      echo "[ts] socket exists"
+      break
+    fi
+    sleep 1
+  done
 
-echo "[ts] checking tailscale status..."
-tailscale --socket="$SOCK" status || true
+  # ----------------------------------------------------------
+  # 2️⃣ Wait for tailscale to be ready (prevents race condition)
+  # ----------------------------------------------------------
+  echo "[ts] waiting for tailscale to reach Running state..."
+  for i in $(seq 1 60); do
+    STATUS="$(tailscale --socket="$SOCK" status 2>/dev/null || true)"
+    if echo "$STATUS" | grep -q "Logged in as"; then
+      echo "[ts] tailscale is ready"
+      break
+    fi
+    sleep 1
+  done
 
   if [[ -z "${TAILSCALE_AUTHKEY:-}" ]]; then
     echo "[ts] WARN: missing TAILSCALE_AUTHKEY, skipping"
     exit 0
   fi
 
-  echo "[ts] tailscale up..."
+  # ----------------------------------------------------------
+  # 3️⃣ Bring interface up safely
+  # ----------------------------------------------------------
+  echo "[ts] running tailscale up..."
   tailscale --socket="$SOCK" up \
     --authkey="$TAILSCALE_AUTHKEY" \
     --hostname="${TS_HOSTNAME:-openclaw-railway}" \
@@ -52,10 +67,11 @@ tailscale --socket="$SOCK" status || true
   tailscale --socket="$SOCK" ip -4 || true
 
   # ----------------------------------------------------------
-  # DEBUG: verify SOCKS is actually listening and usable
+  # 4️⃣ DEBUG: Verify SOCKS proxy
   # ----------------------------------------------------------
   echo "--------------------------------"
   echo "[ts] DEBUG: checking SOCKS proxy"
+
   echo "[ts] checking if SOCKS port 1055 is listening..."
   nc -zv 127.0.0.1 1055 && echo "[ts] SOCKS OK" || echo "[ts] SOCKS FAIL"
 
@@ -63,13 +79,16 @@ tailscale --socket="$SOCK" status || true
     echo "[ts] testing TCP to ${OPENCLAW_SSH_HOST}:22 via SOCKS..."
     nc -x 127.0.0.1:1055 -X 5 -vz "$OPENCLAW_SSH_HOST" 22 || true
   else
-    echo "[ts] OPENCLAW_SSH_HOST not set; skipping nc test to host"
+    echo "[ts] OPENCLAW_SSH_HOST not set; skipping nc test"
   fi
 
   # ----------------------------------------------------------
-  # SSH key setup
+  # 5️⃣ SSH key setup
   # ----------------------------------------------------------
-  if [[ -n "${OPENCLAW_SSH_PRIVATE_KEY:-}" ]] && [[ -n "${OPENCLAW_SSH_HOST:-}" ]] && [[ -n "${OPENCLAW_SSH_USER:-}" ]]; then
+  if [[ -n "${OPENCLAW_SSH_PRIVATE_KEY:-}" ]] && \
+     [[ -n "${OPENCLAW_SSH_HOST:-}" ]] && \
+     [[ -n "${OPENCLAW_SSH_USER:-}" ]]; then
+
     echo "[ts] setting up SSH key..."
 
     SSH_DIR="/tmp/ssh"
@@ -97,9 +116,11 @@ tailscale --socket="$SOCK" status || true
   else
     echo "[ts] SSH vars missing; skipping ssh setup"
   fi
+
 ) &
 
 echo "--------------------------------"
 echo "[start] launching OpenClaw (foreground)"
 echo "--------------------------------"
+
 exec node src/server.js
